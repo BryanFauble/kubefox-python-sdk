@@ -18,11 +18,11 @@ based off the golang KIT SDK.
 # Notes:
 
 
-Auto-generate files from .proto
-python -m grpc_tools.protoc -I. --python_out=. --pyi_out=. --grpc_python_out=. protobuf_msgs.proto
-python -m grpc_tools.protoc -I. --python_out=. --pyi_out=. --grpc_python_out=. broker_svc.proto
+Auto-generate files from .proto:
+- python -m grpc_tools.protoc -I. --python_out=. --pyi_out=. --grpc_python_out=. protobuf_msgs.proto
+- python -m grpc_tools.protoc -I. --python_out=. --pyi_out=. --grpc_python_out=. broker_svc.proto
 
 
 Running the python script locally and taking the hello-world creds:
-sudo mkdir -p /var/run/secrets/kubernetes.io/serviceaccount/ && sudo chown ${USER}:${USER} /var/run/secrets/kubernetes.io/serviceaccount/
-kubectl create token -n kubefox-debug hello-world-frontend-976e059 > /var/run/secrets/kubernetes.io/serviceaccount/token
+- sudo mkdir -p /var/run/secrets/kubernetes.io/serviceaccount/ && sudo chown ${USER}:${USER} /var/run/secrets/kubernetes.io/serviceaccount/
+- kubectl create token -n kubefox-debug hello-world-frontend-976e059 > /var/run/secrets/kubernetes.io/serviceaccount/token
