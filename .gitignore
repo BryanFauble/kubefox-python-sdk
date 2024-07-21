@@ -1,0 +1,27 @@
+# Temp files
+tmp/
+*.bkp
+*.dtmp
+
+# Test output
+*.test
+
+# Debug output
+__debug_bin*
+*.out
+
+# Build output
+bin/
+site/
+tools/
+
+# Misc
+*.DS_Store
+*.ignore.*
+go.work.sum
+workstation/
+
+__pycache__
+*.egg-info
+build
+*.code-workspace
