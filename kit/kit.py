@@ -281,19 +281,25 @@ class Kit:
             metadata_sequence = [(k, v) for k, v in metadata.items()]
 
             my_event = create_subscription()
-            await asyncio.gather(
-                *[
-                    self.handle_subscription(
-                        yield_event_queue(
-                            initial_subscription=my_event,
-                            request_queue=self.request_queue,
+            try:
+                await asyncio.gather(
+                    *[
+                        self.handle_subscription(
+                            yield_event_queue(
+                                initial_subscription=my_event,
+                                request_queue=self.request_queue,
+                            ),
+                            stub,
+                            metadata_sequence,
                         ),
-                        stub,
-                        metadata_sequence,
-                    ),
-                    self.process_responses(),
-                ]
-            )
+                        self.process_responses(),
+                    ]
+                )
+            except Exception as e:
+                print(f"Error: {e}")
+            finally:
+                # Should probably make sure we empty out the event queues
+                print("Done - To clean up anything here?")
 
     # def route(self, rule: str, handler: EventHandler):
     #     pass
