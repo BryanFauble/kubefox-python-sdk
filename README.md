@@ -26,3 +26,4 @@ Auto-generate files from .proto:
 Running the python script locally and taking the hello-world creds:
 - sudo mkdir -p /var/run/secrets/kubernetes.io/serviceaccount/ && sudo chown ${USER}:${USER} /var/run/secrets/kubernetes.io/serviceaccount/
 - kubectl create token -n kubefox-debug hello-world-frontend-976e059 > /var/run/secrets/kubernetes.io/serviceaccount/token
+- kubectl create token -n kubefox-debug hello-world-frontend-976e059 >/tmp/kubefox/hello-world-token

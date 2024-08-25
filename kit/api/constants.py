@@ -1,5 +1,5 @@
-import re
 import os
+import re
 
 # Misc
 SECRET_MASK = "••••••"
@@ -216,7 +216,8 @@ REGEXP_HASH = re.compile(r"^[0-9a-f]{32}$")
 REGEXP_IMAGE = re.compile(r"^.*:[a-z0-9-]{40}$")
 REGEXP_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,28}[a-z0-9]$")
 REGEXP_UUID = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
 
 KUBEFOX_HOME = os.getenv("KUBEFOX_HOME", os.path.join("/", "tmp", "kubefox"))
 

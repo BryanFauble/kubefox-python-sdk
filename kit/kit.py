@@ -1,17 +1,20 @@
+import asyncio
 import logging
-from dataclasses import dataclass
 import os
-from typing import Any, Callable, Generator, List, Optional, Self, Union
+from dataclasses import dataclass
 from enum import Enum
-from urllib.parse import urlparse
-from enum import Enum
+from typing import Any, Coroutine, List, Self, Tuple
 
-from grpc import StatusCode, insecure_channel, secure_channel, ssl_channel_credentials
-from kit.api.types import ComponentDefinition, Dependency, EnvVarDefinition, EnvVarSchema, RouteSpec
-from dataclasses_json import dataclass_json, LetterCase
-from kit.api.vars import DEFAULT_MAX_EVENT_SIZE_BYTES
+from dataclasses_json import LetterCase, dataclass_json
+from grpc import aio, ssl_channel_credentials
 from proto.broker_svc_pb2_grpc import BrokerStub
-from proto.protobuf_msgs_pb2 import Event, MatchedEvent, EventContext
+from proto.protobuf_msgs_pb2 import Event as ProtoEvent
+from proto.protobuf_msgs_pb2 import EventContext, MatchedEvent
+
+from kit.api.event import Event
+from kit.api.types import ComponentDefinition, RouteSpec
+from kit.api.vars import DEFAULT_MAX_EVENT_SIZE_BYTES
+from kit.proto.protobuf_msgs_pb2 import Category
 
 logger = logging.getLogger(__name__)
 
@@ -136,10 +139,42 @@ class Route:
 #         else:
 #             return EventType.KubeFox
 
-def make_event() -> Generator[Event, None, None]:
-    my_context = EventContext(platform="debug", virtual_environment="virtual_environment",
-                              app_deployment="hello-world", release_manifest="release_manifest")
-    yield Event(context=my_context, id="1234")
+
+def create_subscription() -> Event:
+    my_context = EventContext(
+        platform="debug",
+        virtual_environment="virtual_environment",
+        app_deployment="hello-world",
+        release_manifest="release_manifest",
+    )
+    my_event = Event(
+        proto_object=ProtoEvent(
+            context=my_context,
+            id="1234",
+            type=EventType.Register.value,
+            content_type="application/json",
+            ttl=1,
+        )
+    )
+    component_def = ComponentDefinition(
+        type=ComponentType.KubeFox,
+        default_handler=False,
+        hash="123",
+        image="abc",
+        routes=[],
+        env_var_schema={},
+        dependencies={},
+    )
+    my_event.set_json(component_def)
+    return my_event
+
+
+async def yield_event_queue(initial_subscription: Event, request_queue: asyncio.Queue):
+    yield initial_subscription.proto_object
+    while True:
+        new_request: Event = await request_queue.get()
+        yield new_request.proto_object
+        request_queue.task_done()
 
 
 @dataclass_json(letter_case=LetterCase.CAMEL)
@@ -152,14 +187,65 @@ class Kit:
     export: bool
     log: Logger
     brk: Any
+    # TODO: Convert this over to allow the client to register handlers. Currently, this is pointing to a single coroutine
+    event_request_handlers: Coroutine[Any, Any, Any] = None
+    request_queue: asyncio.Queue = asyncio.Queue()
+    response_queue: asyncio.Queue = asyncio.Queue()
 
-    def start(self):
-        # Alternative to a context managed instance is to use `.close()`
+    async def handle_subscription(
+        self, initial_sub, stub: BrokerStub, metadata_sequence: List[Tuple[str, str]]
+    ) -> None:
+        response = stub.Subscribe(
+            initial_sub, metadata=metadata_sequence, wait_for_ready=False
+        )
+        subscribed = False
+        async for res in response:
+            res_event: MatchedEvent = res
+            if not subscribed:
+                subscribed = True
+                print(f"Initial subscription event response: {res_event}")
+            else:
+                print("Got message from broker")
+                self.response_queue.put_nowait(res_event)
+
+    async def process_responses(self) -> None:
+        """
+        Handles the responses from the broker. This is one of the two main loops of
+        kit.
+
+        TODO: Add some more documentation here
+        TODO: Implement all categories and exception handling
+        """
+        try:
+            while True:
+                # Wait until there is an event in the queue
+                matched_event: MatchedEvent = await self.response_queue.get()
+
+                if matched_event.event.category == Category.REQUEST:
+                    result_of_response_to_request = await self.event_request_handlers(
+                        matched_event
+                    )
+                    print(f"Adding event to queue")
+                    self.request_queue.put_nowait(result_of_response_to_request)
+                elif matched_event.event.category == Category.RESPONSE:
+                    print("Response received")
+
+                self.response_queue.task_done()
+
+        except Exception as e:
+            print(f"Error: {e}")
+        finally:
+            print("Done - To clean up anything here")
+
+    async def start(self):
         # open ca.crt and read into string:
         with open("/tmp/kubefox/ca.crt", "r") as file:
             root_ca = file.read()
-        creds = ssl_channel_credentials(root_certificates=root_ca.encode(),
-                                        private_key=None, certificate_chain=None)
+        with open("/tmp/kubefox/hello-world-token", "r") as file:
+            token = file.read()
+        creds = ssl_channel_credentials(
+            root_certificates=root_ca.encode(), private_key=None, certificate_chain=None
+        )
 
         # TODO: Implement this config:
         # grpcCfg := `{
@@ -174,24 +260,40 @@ class Kit:
         # 	  "RetryableStatusCodes": [ "UNAVAILABLE" ]
         #   }
         # }]}`
-        with secure_channel("127.0.0.1:6060", credentials=creds) as channel:
-            # TODO: See if I can just hit the broker directly:
-            # This is the golang code to create a new client:
-            # broker := grpc.NewClient(grpc.ClientOpts{
-            #     Platform:      adapter.Platform,
-            #     Component:     comp,
-            #     Pod:           pod,
-            #     BrokerAddr:    adapter.BrokerAddr,
-            #     HealthSrvAddr: adapter.HealthSrvAddr,
-            #     TokenPath:     tokenPath,
-            # })
-            print("-------------- BrokerStub --------------")
+
+        async with aio.secure_channel(
+            target="127.0.0.1:6060", credentials=creds
+        ) as channel:
             stub = BrokerStub(channel)
-            result = stub.Subscribe(make_event())
-            if not result.is_active():
-                logger.error(result.exception())
-                raise RuntimeError(result.details)
-            logger.debug(result.details())
+
+            # A CallCredentials has to be used with secure Channel, otherwise the metadata will not be transmitted to the server.
+            metadata = {
+                "id": "1234",
+                "hash": "976e059",
+                "name": "hello-world",
+                "app": "hello-world",
+                "type": "KubeFox",
+                "platform": "debug",
+                "pod": "hello-world",
+                "token": token,
+                "component": "frontend",
+            }
+            metadata_sequence = [(k, v) for k, v in metadata.items()]
+
+            my_event = create_subscription()
+            await asyncio.gather(
+                *[
+                    self.handle_subscription(
+                        yield_event_queue(
+                            initial_subscription=my_event,
+                            request_queue=self.request_queue,
+                        ),
+                        stub,
+                        metadata_sequence,
+                    ),
+                    self.process_responses(),
+                ]
+            )
 
     # def route(self, rule: str, handler: EventHandler):
     #     pass
@@ -254,7 +356,7 @@ class Kit:
                 image="abc",
                 routes=[],
                 env_var_schema={},
-                dependencies={}
+                dependencies={},
             ),
             max_event_size=DEFAULT_MAX_EVENT_SIZE_BYTES,
             num_workers=os.cpu_count(),
@@ -267,7 +369,7 @@ class Kit:
             #     HealthSrvAddr=healthAddr
             # ))
             log=None,
-            brk=None
+            brk=None,
         )
 
         return svc
