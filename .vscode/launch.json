@@ -13,7 +13,7 @@
             "name": "Launch_kit",
             "type": "debugpy",
             "request": "launch",
-            "program": "implementing_kit.py",
+            "program": "components/frontend/main.py",
             "console": "integratedTerminal",
             "justMyCode": false,
         }

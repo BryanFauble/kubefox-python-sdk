@@ -3,52 +3,60 @@
 # source: protobuf_msgs.proto
 # Protobuf Python Version: 5.26.1
 """Generated protocol buffer code."""
-from opentelemetry.proto.trace.v1 import trace_pb2 as opentelemetry_dot_proto_dot_trace_dot_v1_dot_trace__pb2
-from opentelemetry.proto.metrics.v1 import metrics_pb2 as opentelemetry_dot_proto_dot_metrics_dot_v1_dot_metrics__pb2
-from opentelemetry.proto.logs.v1 import logs_pb2 as opentelemetry_dot_proto_dot_logs_dot_v1_dot_logs__pb2
-from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13protobuf_msgs.proto\x12\x10kubefox.proto.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a&opentelemetry/proto/logs/v1/logs.proto\x1a,opentelemetry/proto/metrics/v1/metrics.proto\x1a(opentelemetry/proto/trace/v1/trace.proto\"a\n\tComponent\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x0b\n\x03\x61pp\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0c\n\x04hash\x18\x04 \x01(\t\x12\n\n\x02id\x18\x05 \x01(\t\x12\x11\n\tbroker_id\x18\x06 \x01(\t\"o\n\x0c\x45ventContext\x12\x10\n\x08platform\x18\x01 \x01(\t\x12\x1b\n\x13virtual_environment\x18\x02 \x01(\t\x12\x16\n\x0e\x61pp_deployment\x18\x03 \x01(\t\x12\x18\n\x10release_manifest\x18\x04 \x01(\t\"T\n\x0bSpanContext\x12\x10\n\x08trace_id\x18\x01 \x01(\x0c\x12\x0f\n\x07span_id\x18\x02 \x01(\x0c\x12\x13\n\x0btrace_state\x18\x03 \x01(\t\x12\r\n\x05\x66lags\x18\x04 \x01(\x07\"\xe2\x04\n\x05\x45vent\x12\n\n\x02id\x18\x01 \x01(\t\x12\x11\n\tparent_id\x18\x02 \x01(\t\x12\x32\n\x0bparent_span\x18\x03 \x01(\x0b\x32\x1d.kubefox.proto.v1.SpanContext\x12\x0c\n\x04type\x18\x04 \x01(\t\x12,\n\x08\x63\x61tegory\x18\x05 \x01(\x0e\x32\x1a.kubefox.proto.v1.Category\x12\x13\n\x0b\x63reate_time\x18\x06 \x01(\x03\x12\x0b\n\x03ttl\x18\x07 \x01(\x03\x12/\n\x07\x63ontext\x18\x08 \x01(\x0b\x32\x1e.kubefox.proto.v1.EventContext\x12+\n\x06source\x18\t \x01(\x0b\x32\x1b.kubefox.proto.v1.Component\x12+\n\x06target\x18\n \x01(\x0b\x32\x1b.kubefox.proto.v1.Component\x12\x33\n\x06params\x18\x0b \x03(\x0b\x32#.kubefox.proto.v1.Event.ParamsEntry\x12\x33\n\x06values\x18\x0c \x03(\x0b\x32#.kubefox.proto.v1.Event.ValuesEntry\x12\x14\n\x0c\x63ontent_type\x18\x0e \x01(\t\x12\x0f\n\x07\x63ontent\x18\x0f \x01(\x0c\x1a\x45\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12%\n\x05value\x18\x02 \x01(\x0b\x32\x16.google.protobuf.Value:\x02\x38\x01\x1a\x45\n\x0bValuesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12%\n\x05value\x18\x02 \x01(\x0b\x32\x16.google.protobuf.Value:\x02\x38\x01\"\xc2\x01\n\x0cMatchedEvent\x12&\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x17.kubefox.proto.v1.Event\x12\x10\n\x08route_id\x18\x02 \x01(\x03\x12\x34\n\x03\x65nv\x18\x03 \x03(\x0b\x32\'.kubefox.proto.v1.MatchedEvent.EnvEntry\x1a\x42\n\x08\x45nvEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12%\n\x05value\x18\x02 \x01(\x0b\x32\x16.google.protobuf.Value:\x02\x38\x01\"\xc6\x01\n\tTelemetry\x12\x10\n\x08trace_id\x18\x01 \x01(\x0c\x12;\n\x0blog_records\x18\r \x03(\x0b\x32&.opentelemetry.proto.logs.v1.LogRecord\x12\x37\n\x07metrics\x18\x0e \x03(\x0b\x32&.opentelemetry.proto.metrics.v1.Metric\x12\x31\n\x05spans\x18\x0f \x03(\x0b\x32\".opentelemetry.proto.trace.v1.Span*?\n\x08\x43\x61tegory\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0b\n\x07MESSAGE\x10\x01\x12\x0b\n\x07REQUEST\x10\x02\x12\x0c\n\x08RESPONSE\x10\x03\x42 Z\x1egithub.com/xigxog/kubefox/coreb\x06proto3')
+from opentelemetry.proto.logs.v1 import (
+    logs_pb2 as opentelemetry_dot_proto_dot_logs_dot_v1_dot_logs__pb2,
+)
+from opentelemetry.proto.metrics.v1 import (
+    metrics_pb2 as opentelemetry_dot_proto_dot_metrics_dot_v1_dot_metrics__pb2,
+)
+from opentelemetry.proto.trace.v1 import (
+    trace_pb2 as opentelemetry_dot_proto_dot_trace_dot_v1_dot_trace__pb2,
+)
+
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
+    b'\n\x13protobuf_msgs.proto\x12\x10kubefox.proto.v1\x1a&opentelemetry/proto/logs/v1/logs.proto\x1a,opentelemetry/proto/metrics/v1/metrics.proto\x1a(opentelemetry/proto/trace/v1/trace.proto"a\n\tComponent\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x0b\n\x03\x61pp\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0c\n\x04hash\x18\x04 \x01(\t\x12\n\n\x02id\x18\x05 \x01(\t\x12\x11\n\tbroker_id\x18\x06 \x01(\t"o\n\x0c\x45ventContext\x12\x10\n\x08platform\x18\x01 \x01(\t\x12\x1b\n\x13virtual_environment\x18\x02 \x01(\t\x12\x16\n\x0e\x61pp_deployment\x18\x03 \x01(\t\x12\x18\n\x10release_manifest\x18\x04 \x01(\t"T\n\x0bSpanContext\x12\x10\n\x08trace_id\x18\x01 \x01(\x0c\x12\x0f\n\x07span_id\x18\x02 \x01(\x0c\x12\x13\n\x0btrace_state\x18\x03 \x01(\t\x12\r\n\x05\x66lags\x18\x04 \x01(\x07"\xb2\x04\n\x05\x45vent\x12\n\n\x02id\x18\x01 \x01(\t\x12\x11\n\tparent_id\x18\x02 \x01(\t\x12\x32\n\x0bparent_span\x18\x03 \x01(\x0b\x32\x1d.kubefox.proto.v1.SpanContext\x12\x0c\n\x04type\x18\x04 \x01(\t\x12,\n\x08\x63\x61tegory\x18\x05 \x01(\x0e\x32\x1a.kubefox.proto.v1.Category\x12\x13\n\x0b\x63reate_time\x18\x06 \x01(\x03\x12\x0b\n\x03ttl\x18\x07 \x01(\x03\x12/\n\x07\x63ontext\x18\x08 \x01(\x0b\x32\x1e.kubefox.proto.v1.EventContext\x12+\n\x06source\x18\t \x01(\x0b\x32\x1b.kubefox.proto.v1.Component\x12+\n\x06target\x18\n \x01(\x0b\x32\x1b.kubefox.proto.v1.Component\x12\x33\n\x06params\x18\x0b \x03(\x0b\x32#.kubefox.proto.v1.Event.ParamsEntry\x12\x33\n\x06values\x18\x0c \x03(\x0b\x32#.kubefox.proto.v1.Event.ValuesEntry\x12\x14\n\x0c\x63ontent_type\x18\x0e \x01(\t\x12\x0f\n\x07\x63ontent\x18\x0f \x01(\x0c\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a-\n\x0bValuesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01"\xaa\x01\n\x0cMatchedEvent\x12&\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x17.kubefox.proto.v1.Event\x12\x10\n\x08route_id\x18\x02 \x01(\x03\x12\x34\n\x03\x65nv\x18\x03 \x03(\x0b\x32\'.kubefox.proto.v1.MatchedEvent.EnvEntry\x1a*\n\x08\x45nvEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01"\xc6\x01\n\tTelemetry\x12\x10\n\x08trace_id\x18\x01 \x01(\x0c\x12;\n\x0blog_records\x18\r \x03(\x0b\x32&.opentelemetry.proto.logs.v1.LogRecord\x12\x37\n\x07metrics\x18\x0e \x03(\x0b\x32&.opentelemetry.proto.metrics.v1.Metric\x12\x31\n\x05spans\x18\x0f \x03(\x0b\x32".opentelemetry.proto.trace.v1.Span*?\n\x08\x43\x61tegory\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0b\n\x07MESSAGE\x10\x01\x12\x0b\n\x07REQUEST\x10\x02\x12\x0c\n\x08RESPONSE\x10\x03\x42 Z\x1egithub.com/xigxog/kubefox/coreb\x06proto3'
+)
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(
-    DESCRIPTOR, 'protobuf_msgs_pb2', _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "protobuf_msgs_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    _globals['DESCRIPTOR']._loaded_options = None
-    _globals['DESCRIPTOR']._serialized_options = b'Z\036github.com/xigxog/kubefox/core'
-    _globals['_EVENT_PARAMSENTRY']._loaded_options = None
-    _globals['_EVENT_PARAMSENTRY']._serialized_options = b'8\001'
-    _globals['_EVENT_VALUESENTRY']._loaded_options = None
-    _globals['_EVENT_VALUESENTRY']._serialized_options = b'8\001'
-    _globals['_MATCHEDEVENT_ENVENTRY']._loaded_options = None
-    _globals['_MATCHEDEVENT_ENVENTRY']._serialized_options = b'8\001'
-    _globals['_CATEGORY']._serialized_start = 1508
-    _globals['_CATEGORY']._serialized_end = 1571
-    _globals['_COMPONENT']._serialized_start = 199
-    _globals['_COMPONENT']._serialized_end = 296
-    _globals['_EVENTCONTEXT']._serialized_start = 298
-    _globals['_EVENTCONTEXT']._serialized_end = 409
-    _globals['_SPANCONTEXT']._serialized_start = 411
-    _globals['_SPANCONTEXT']._serialized_end = 495
-    _globals['_EVENT']._serialized_start = 498
-    _globals['_EVENT']._serialized_end = 1108
-    _globals['_EVENT_PARAMSENTRY']._serialized_start = 968
-    _globals['_EVENT_PARAMSENTRY']._serialized_end = 1037
-    _globals['_EVENT_VALUESENTRY']._serialized_start = 1039
-    _globals['_EVENT_VALUESENTRY']._serialized_end = 1108
-    _globals['_MATCHEDEVENT']._serialized_start = 1111
-    _globals['_MATCHEDEVENT']._serialized_end = 1305
-    _globals['_MATCHEDEVENT_ENVENTRY']._serialized_start = 1239
-    _globals['_MATCHEDEVENT_ENVENTRY']._serialized_end = 1305
-    _globals['_TELEMETRY']._serialized_start = 1308
-    _globals['_TELEMETRY']._serialized_end = 1506
+    _globals["DESCRIPTOR"]._loaded_options = None
+    _globals["DESCRIPTOR"]._serialized_options = b"Z\036github.com/xigxog/kubefox/core"
+    _globals["_EVENT_PARAMSENTRY"]._loaded_options = None
+    _globals["_EVENT_PARAMSENTRY"]._serialized_options = b"8\001"
+    _globals["_EVENT_VALUESENTRY"]._loaded_options = None
+    _globals["_EVENT_VALUESENTRY"]._serialized_options = b"8\001"
+    _globals["_MATCHEDEVENT_ENVENTRY"]._loaded_options = None
+    _globals["_MATCHEDEVENT_ENVENTRY"]._serialized_options = b"8\001"
+    _globals["_CATEGORY"]._serialized_start = 1406
+    _globals["_CATEGORY"]._serialized_end = 1469
+    _globals["_COMPONENT"]._serialized_start = 169
+    _globals["_COMPONENT"]._serialized_end = 266
+    _globals["_EVENTCONTEXT"]._serialized_start = 268
+    _globals["_EVENTCONTEXT"]._serialized_end = 379
+    _globals["_SPANCONTEXT"]._serialized_start = 381
+    _globals["_SPANCONTEXT"]._serialized_end = 465
+    _globals["_EVENT"]._serialized_start = 468
+    _globals["_EVENT"]._serialized_end = 1030
+    _globals["_EVENT_PARAMSENTRY"]._serialized_start = 938
+    _globals["_EVENT_PARAMSENTRY"]._serialized_end = 983
+    _globals["_EVENT_VALUESENTRY"]._serialized_start = 985
+    _globals["_EVENT_VALUESENTRY"]._serialized_end = 1030
+    _globals["_MATCHEDEVENT"]._serialized_start = 1033
+    _globals["_MATCHEDEVENT"]._serialized_end = 1203
+    _globals["_MATCHEDEVENT_ENVENTRY"]._serialized_start = 1161
+    _globals["_MATCHEDEVENT_ENVENTRY"]._serialized_end = 1203
+    _globals["_TELEMETRY"]._serialized_start = 1206
+    _globals["_TELEMETRY"]._serialized_end = 1404
 # @@protoc_insertion_point(module_scope)
