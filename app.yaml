@@ -1,0 +1,6 @@
+# This is only for testing
+name: hello-world
+title: Hello World
+description: A simple App demonstrating the use of KubeFox in python.
+environment:
+  KUBEFOX_LOG_LEVEL: debug

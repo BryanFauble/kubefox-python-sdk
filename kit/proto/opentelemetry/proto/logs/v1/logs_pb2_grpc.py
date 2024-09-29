@@ -22,7 +22,7 @@ except ImportError:
 if _version_not_supported:
     warnings.warn(
         f"The grpc package installed is at version {GRPC_VERSION},"
-        + f" but the generated code in protobuf_msgs_pb2_grpc.py depends on"
+        + f" but the generated code in opentelemetry/proto/logs/v1/logs_pb2_grpc.py depends on"
         + f" grpcio>={GRPC_GENERATED_VERSION}."
         + f" Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}"
         + f" or downgrade your generated code using grpcio-tools<={GRPC_VERSION}."

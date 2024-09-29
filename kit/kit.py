@@ -1,143 +1,54 @@
 import asyncio
 import logging
 import os
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Coroutine, List, Self, Tuple
+import random
+from dataclasses import dataclass, field
+from typing import Any, AsyncGenerator, Coroutine, Dict, List, Self, Tuple
 
 from dataclasses_json import LetterCase, dataclass_json
 from grpc import aio, ssl_channel_credentials
-from proto.broker_svc_pb2_grpc import BrokerStub
-from proto.protobuf_msgs_pb2 import Event as ProtoEvent
-from proto.protobuf_msgs_pb2 import EventContext, MatchedEvent
+from opentelemetry import trace
 
-from kit.api.event import Event
-from kit.api.types import ComponentDefinition, RouteSpec
-from kit.api.vars import DEFAULT_MAX_EVENT_SIZE_BYTES
-from kit.proto.protobuf_msgs_pb2 import Category
+from kit.api import exceptions as KitExceptions
+from kit.api import vars as KitVars
+from kit.api.env_template import EnvTemplate
+from kit.api.kit_types import (
+    ComponentDefinition,
+    ComponentType,
+    EventType,
+    Route,
+    RouteSpec,
+)
+from kit.proto.broker_svc_pb2_grpc import BrokerStub
+from kit.proto.protobuf_msgs_pb2 import (
+    Category,
+    Component,
+    Event,
+    EventContext,
+    MatchedEvent,
+)
+from kit.telemetry.trace import (
+    attach_event_attributes,
+    extract_otel_context,
+    setup_trace_provder,
+)
 
+tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
+max_attempts = 5
 
 # TODO: https://www.python-httpx.org/advanced/transports/#custom-transports
 # Implement a custom transport for HTTPX to handle putting data into and pulling data out of an event
 
 
-class EventType(Enum):
-    Cron = "io.kubefox.cron"
-    Dapr = "io.kubefox.dapr"
-    HTTP = "io.kubefox.http"
-    KubeFox = "io.kubefox.kubefox"
-    Kubernetes = "io.kubefox.kubernetes"
-    Ack = "io.kubefox.ack"
-    Bootstrap = "io.kubefox.bootstrap"
-    Error = "io.kubefox.error"
-    Health = "io.kubefox.health"
-    Metrics = "io.kubefox.metrics"
-    Nack = "io.kubefox.nack"
-    Register = "io.kubefox.register"
-    Rejected = "io.kubefox.rejected"
-    Telemetry = "io.kubefox.telemetry"
-    Unknown = "io.kubefox.unknown"
+def set_json(event: Event, v) -> None:
+    if v is None:
+        v = {}
+    b = v.to_json().encode("utf-8")
 
-
-class ComponentType(Enum):
-    Broker = "Broker"
-    HTTPAdapter = "HTTPAdapter"
-    KubeFox = "KubeFox"
-    NATS = "NATS"
-
-
-class EnvVarType(Enum):
-    Array = "Array"
-    Boolean = "Boolean"
-    Number = "Number"
-    String = "String"
-
-
-class Val:
-    pass
-
-
-class URL:
-    pass
-
-
-class Logger:
-    pass
-
-
-class FS:
-    pass
-
-
-class Client:
-    pass
-
-
-class RoundTripper:
-    pass
-
-
-class Context:
-    pass
-
-
-class Template:
-    pass
-
-
-class HTMLTemplate:
-    pass
-
-
-# EventHandler = Callable[['Kontext'], None]
-
-
-@dataclass
-class EnvVarDep:
-    name: str
-    type: EnvVarType
-
-
-@dataclass
-class ComponentDep:
-    name: str
-    app: str
-    type: ComponentType
-    event_type: EventType
-
-
-# @dataclass
-# class RouteSpec:
-#     pass
-
-
-@dataclass
-class Route:
-    route_spec: RouteSpec
-    # handler: EventHandler
-
-
-# @dataclass
-# class Dependency:
-#     type: ComponentType
-#     app: str
-#     name: str
-
-#     def name(self) -> str:
-#         return self.name
-
-#     def app(self) -> str:
-#         return self.app
-
-#     def type(self) -> ComponentType:
-#         return self.type
-
-#     def event_type(self) -> EventType:
-#         if self.type == ComponentType.HTTPAdapter:
-#             return EventType.HTTP
-#         else:
-#             return EventType.KubeFox
+    event.content_type = f"{
+        KitVars.CONTENT_TYPE_JSON}; {KitVars.CHARSET_UTF8}"
+    event.content = b
 
 
 def create_subscription() -> Event:
@@ -148,67 +59,106 @@ def create_subscription() -> Event:
         release_manifest="release_manifest",
     )
     my_event = Event(
-        proto_object=ProtoEvent(
-            context=my_context,
-            id="1234",
-            type=EventType.Register.value,
-            content_type="application/json",
-            ttl=1,
-        )
+        context=my_context,
+        id="1234",
+        type=EventType.Register.value,
+        content_type="application/json",
+        ttl=1,
     )
     component_def = ComponentDefinition(
         type=ComponentType.KubeFox,
         default_handler=False,
         hash="123",
         image="abc",
+        # TODO: Pass along the routes to the initial subscription event
         routes=[],
         env_var_schema={},
         dependencies={},
     )
-    my_event.set_json(component_def)
+    set_json(event=my_event, v=component_def)
     return my_event
 
 
-async def yield_event_queue(initial_subscription: Event, request_queue: asyncio.Queue):
-    yield initial_subscription.proto_object
+async def yield_event_queue(
+    initial_subscription: Event, request_queue: asyncio.Queue
+) -> AsyncGenerator[Event, Any]:
+    yield initial_subscription
     while True:
         new_request: Event = await request_queue.get()
-        yield new_request.proto_object
-        request_queue.task_done()
+        with tracer.start_as_current_span(
+            name=f"Send {Category.Name(new_request.category)} to broker",
+            context=extract_otel_context(new_request.parent_span),
+        ) as root_span:
+            attach_event_attributes(event=new_request, span=root_span)
+            yield new_request
+            request_queue.task_done()
 
 
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass
 class Kit:
-    routes: List[Route]
-    comp_def: Any
     max_event_size: int
     num_workers: int
     export: bool
-    log: Logger
-    brk: Any
-    # TODO: Convert this over to allow the client to register handlers. Currently, this is pointing to a single coroutine
-    event_request_handlers: Coroutine[Any, Any, Any] = None
-    request_queue: asyncio.Queue = asyncio.Queue()
-    response_queue: asyncio.Queue = asyncio.Queue()
+    log: logging.Logger
+    broker_component: Component = None
+    routes: Dict[int, Route] = field(default_factory=dict)
+    comp_def: ComponentDefinition = field(default_factory=ComponentDefinition)
+    # TODO: Update the typing here to be more specific than Any
+    default_request_handler: Coroutine[Any, Any, Any] = None
+
+    to_broker_queue: asyncio.Queue = asyncio.Queue()
+    from_broker_queue: asyncio.Queue = asyncio.Queue()
+
+    def __post_init__(self) -> None:
+        # TODO: Pull data to pass along to the initial setup of the tracer instead of hard coding
+        metadata = {
+            "id": "1234",
+            "hash": "976e059",
+            "name": "hello-world",
+            "component": "frontend",
+        }
+        setup_trace_provder(
+            component_id=metadata["id"],
+            component_hash=metadata["hash"],
+            name=metadata["name"],
+            component=metadata["component"],
+        )
+
+    def register_default_request_handler(
+        self, handler: Coroutine[Any, Any, Any]
+    ) -> None:
+        self.default_request_handler = handler
+        self.comp_def.default_handler = handler is not None
+
+    def route(self, rule: str, handler: Coroutine[Any, Any, Any]) -> None:
+        r = EnvTemplate("route", rule)
+        kit_route_spec = RouteSpec(
+            id=len(self.routes), rule=rule, env_var_schema=r.env_schema.vars
+        )
+        kit_route = Route(route_spec=kit_route_spec, handler=handler)
+        self.routes.update({len(self.routes): kit_route})
+        self.comp_def.routes.append(kit_route_spec)
 
     async def handle_subscription(
-        self, initial_sub, stub: BrokerStub, metadata_sequence: List[Tuple[str, str]]
+        self,
+        initial_sub: AsyncGenerator[Event, Any],
+        stub: BrokerStub,
+        metadata_sequence: List[Tuple[str, str]],
     ) -> None:
-        response = stub.Subscribe(
-            initial_sub, metadata=metadata_sequence, wait_for_ready=False
-        )
+        response = stub.Subscribe(initial_sub, metadata=metadata_sequence)
         subscribed = False
         async for res in response:
             res_event: MatchedEvent = res
             if not subscribed:
                 subscribed = True
+                self.broker_component = res_event.event.source
                 print(f"Initial subscription event response: {res_event}")
             else:
                 print("Got message from broker")
-                self.response_queue.put_nowait(res_event)
+                self.from_broker_queue.put_nowait(res_event)
 
-    async def process_responses(self) -> None:
+    async def process_responses(self, worker_name: str) -> None:
         """
         Handles the responses from the broker. This is one of the two main loops of
         kit.
@@ -219,25 +169,57 @@ class Kit:
         try:
             while True:
                 # Wait until there is an event in the queue
-                matched_event: MatchedEvent = await self.response_queue.get()
+                matched_event: MatchedEvent = await self.from_broker_queue.get()
 
-                if matched_event.event.category == Category.REQUEST:
-                    result_of_response_to_request = await self.event_request_handlers(
-                        matched_event
+                with tracer.start_as_current_span(
+                    name=f"Handle {Category.Name(matched_event.event.category)}",
+                    context=extract_otel_context(matched_event.event.parent_span),
+                ) as root_span:
+                    attach_event_attributes(matched_event=matched_event, span=root_span)
+
+                    print(
+                        f"Worker: {worker_name}, "
+                        + f"Processing event: {matched_event.event.id}"
                     )
-                    print(f"Adding event to queue")
-                    self.request_queue.put_nowait(result_of_response_to_request)
-                elif matched_event.event.category == Category.RESPONSE:
-                    print("Response received")
 
-                self.response_queue.task_done()
+                    if matched_event.event.category == Category.REQUEST:
+                        route_id = matched_event.route_id
+                        route = self.routes.get(route_id, None)
+                        if route is None:
+                            handler = self.default_request_handler
+                            if handler is None:
+                                raise KitExceptions.KubeFoxErrorNotFound(
+                                    "default handler not found"
+                                )
+                        else:
+                            handler = route.handler
+                        result_of_response_to_request = await handler(matched_event)
+                        print(
+                            f"Got result from handler for worker: {
+                              worker_name}"
+                        )
+                        await self.to_broker_queue.put(result_of_response_to_request)
+                    elif matched_event.event.category == Category.RESPONSE:
+                        print("Response received")
+
+                self.from_broker_queue.task_done()
 
         except Exception as e:
-            print(f"Error: {e}")
+            logger.exception(f"Error in process_responses")
         finally:
-            print("Done - To clean up anything here")
+            raise KitExceptions.KubeFoxErrorUnexpected("Shutting down worker")
 
-    async def start(self):
+    async def start(self, attempt: int = 0):
+        if attempt >= max_attempts:
+            raise KitExceptions.KubeFoxErrorTimeout("broker subscription timed out")
+
+        if self.export:
+            # TODO: Write out in JSON the component definition
+            print(self.comp_def.to_json())
+            return
+            # TODO: Code for starting up broker in "dry-run" mode is needed. This is used to generate the ApplicationManifest k8s resource definition
+            # Extracting env vars from routes: https://github.com/xigxog/kubefox/blob/main/api/env_template.go#L53
+
         # open ca.crt and read into string:
         with open("/tmp/kubefox/ca.crt", "r") as file:
             root_ca = file.read()
@@ -261,6 +243,7 @@ class Kit:
         #   }
         # }]}`
 
+        logger.info("subscribing to broker, attempt %d/%d", attempt + 1, max_attempts)
         async with aio.secure_channel(
             target="127.0.0.1:6060", credentials=creds
         ) as channel:
@@ -279,54 +262,35 @@ class Kit:
                 "component": "frontend",
             }
             metadata_sequence = [(k, v) for k, v in metadata.items()]
-
             my_event = create_subscription()
+            response_workers = []
+            for i in range(os.cpu_count()):
+                response_workers.append(asyncio.create_task(self.process_responses(i)))
             try:
                 await asyncio.gather(
                     *[
                         self.handle_subscription(
                             yield_event_queue(
                                 initial_subscription=my_event,
-                                request_queue=self.request_queue,
+                                request_queue=self.to_broker_queue,
                             ),
                             stub,
                             metadata_sequence,
                         ),
-                        self.process_responses(),
+                        *response_workers,
                     ]
                 )
+            except (asyncio.exceptions.CancelledError, ConnectionRefusedError):
+                logger.warning("broker subscription closed", exc_info=True)
+                await asyncio.sleep(random.randint(1, 2))
+                await self.start(attempt + 1)
             except Exception as e:
                 print(f"Error: {e}")
+                raise
             finally:
                 # Should probably make sure we empty out the event queues
-                print("Done - To clean up anything here?")
-
-    # def route(self, rule: str, handler: EventHandler):
-    #     pass
-
-    # def static(self, path_prefix: str, fs_prefix: str, fs: FS):
-    #     pass
-
-    # def default(self, handler: EventHandler):
-    #     pass
-
-    # def env_var(self, name: str, opts: List[Any]) -> EnvVarDep:
-    #     pass
-
-    # def component(self, name: str) -> ComponentDep:
-    #     pass
-
-    # def http_adapter(self, name: str) -> ComponentDep:
-    #     pass
-
-    # def title(self, title: str):
-    #     pass
-
-    # def description(self, description: str):
-    #     pass
-
-    # def log(self) -> Logger:
-    #     pass
+                # print("Done - To clean up anything here?")
+                pass
 
     @classmethod
     def new(cls) -> Self:
@@ -354,7 +318,7 @@ class Kit:
         # return svc
 
         svc = cls(
-            routes=[],
+            # routes=[],
             comp_def=ComponentDefinition(
                 type=ComponentType.KubeFox,
                 default_handler=False,
@@ -364,7 +328,7 @@ class Kit:
                 env_var_schema={},
                 dependencies={},
             ),
-            max_event_size=DEFAULT_MAX_EVENT_SIZE_BYTES,
+            max_event_size=KitVars.DEFAULT_MAX_EVENT_SIZE_BYTES,
             num_workers=os.cpu_count(),
             export=False,
             # log=logkf.Global,
@@ -375,194 +339,6 @@ class Kit:
             #     HealthSrvAddr=healthAddr
             # ))
             log=None,
-            brk=None,
         )
 
         return svc
-
-
-# class Kontext:
-#     def env(self, v: EnvVarDep) -> str:
-#         pass
-
-#     def env_v(self, v: EnvVarDep) -> Val:
-#         pass
-
-#     def env_def(self, v: EnvVarDep, def: str) -> str:
-#         pass
-
-#     def env_def_v(self, v: EnvVarDep, def: Val) -> Val:
-#         pass
-
-#     def resp(self) -> 'Resp':
-#         pass
-
-#     def req(self, target: ComponentDep) -> 'Req':
-#         pass
-
-#     def forward(self, target: ComponentDep) -> 'Req':
-#         pass
-
-#     def http(self, target: ComponentDep) -> Client:
-#         pass
-
-#     def transport(self, target: ComponentDep) -> RoundTripper:
-#         pass
-
-#     def context(self) -> Context:
-#         pass
-
-#     def log(self) -> Logger:
-#         pass
-
-
-# class Req:
-#     def send_str(self, s: str) -> ('EventReader', Optional[Exception]):
-#         pass
-
-#     def send_html(self, h: str) -> ('EventReader', Optional[Exception]):
-#         pass
-
-#     def send_json(self, v: Any) -> ('EventReader', Optional[Exception]):
-#         pass
-
-#     def send_bytes(self, content_type: str, content: bytes) -> ('EventReader', Optional[Exception]):
-#         pass
-
-#     def send_reader(self, content_type: str, reader: Any) -> ('EventReader', Optional[Exception]):
-#         pass
-
-#     def send(self) -> ('EventReader', Optional[Exception]):
-#         pass
-
-
-# class Resp:
-#     def forward(self, evt: 'EventReader') -> Optional[Exception]:
-#         pass
-
-#     def send_str(self, s: str) -> Optional[Exception]:
-#         pass
-
-#     def send_html(self, h: str) -> Optional[Exception]:
-#         pass
-
-#     def send_json(self, v: Any) -> Optional[Exception]:
-#         pass
-
-#     def send_accepts(self, json: Any, html: str, str: str) -> Optional[Exception]:
-#         pass
-
-#     def send_bytes(self, content_type: str, b: bytes) -> Optional[Exception]:
-#         pass
-
-#     def send_reader(self, content_type: str, reader: Any) -> Optional[Exception]:
-#         pass
-
-#     def send_template(self, tpl: Template, name: str, data: Any) -> Optional[Exception]:
-#         pass
-
-#     def send_html_template(self, tpl: HTMLTemplate, name: str, data: Any) -> Optional[Exception]:
-#         pass
-
-#     def send(self) -> Optional[Exception]:
-#         pass
-
-
-# class EventReader:
-#     def event_type(self) -> EventType:
-#         pass
-
-#     def param(self, key: str) -> str:
-#         pass
-
-#     def param_v(self, key: str) -> Val:
-#         pass
-
-#     def param_def(self, key: str, def: str) -> str:
-#         pass
-
-#     def url(self) -> (URL, Optional[Exception]):
-#         pass
-
-#     def path_suffix(self) -> str:
-#         pass
-
-#     def query(self, key: str) -> str:
-#         pass
-
-#     def query_v(self, key: str) -> Val:
-#         pass
-
-#     def query_def(self, key: str, def: str) -> str:
-#         pass
-
-#     def query_all(self, key: str) -> List[str]:
-#         pass
-
-#     def header(self, key: str) -> str:
-#         pass
-
-#     def header_v(self, key: str) -> Val:
-#         pass
-
-#     def header_def(self, key: str, def: str) -> str:
-#         pass
-
-#     def header_all(self, key: str) -> List[str]:
-#         pass
-
-#     def status(self) -> int:
-#         pass
-
-#     def status_v(self) -> Val:
-#         pass
-
-#     def bind(self, v: Any) -> Optional[Exception]:
-#         pass
-
-#     def str(self) -> str:
-#         pass
-
-#     def bytes(self) -> bytes:
-#         pass
-
-
-# class EventWriter(EventReader):
-#     def set_param(self, key: str, value: str):
-#         pass
-
-#     def set_param_v(self, key: str, value: Val):
-#         pass
-
-#     def set_url(self, u: URL):
-#         pass
-
-#     def rewrite_path(self, path: str):
-#         pass
-
-#     def set_query(self, key: str, value: str):
-#         pass
-
-#     def set_query_v(self, key: str, value: Val):
-#         pass
-
-#     def del_query(self, key: str):
-#         pass
-
-#     def set_header(self, key: str, value: str):
-#         pass
-
-#     def set_header_v(self, key: str, value: Val):
-#         pass
-
-#     def add_header(self, key: str, value: str):
-#         pass
-
-#     def del_header(self, key: str):
-#         pass
-
-#     def set_status(self, code: int):
-#         pass
-
-#     def set_status_v(self, val: Val):
-#         pass
